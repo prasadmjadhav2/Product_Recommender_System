@@ -1,0 +1,864 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {"frido_dataset.csv":false};
+        var gk_fileData = {"frido_dataset.csv":"Category,Type,Product,Rating,Price,Purchase,Description\r\nInsoles,Barefoot Sock Shoe,Barefoot Sock Shoe,4.8,2.699,,\r\nInsoles,Active Feet Comfort,Active Socks,4.8,799,,\r\nInsoles,Sports,Dual Gel Pro,4.8,899,,\r\nInsoles,Flat Feet,Flat Arch Support,4.8,1.599,,\r\nInsoles,Comfort,Max Comfort Memory Hi-Per Foam,4.6,499,,\r\nInsoles,Sports,Arch Sports,4.7,499,,\r\nInsoles,Comfort,Dual Gel,4.7,599,,\r\nInsoles,Flat Feet,Flat Feet Arch Support,4.8,999,,\r\nInsoles,Comfort Pad,Ouch Free High Heels Ball of Foot Cushions,4.6,699,,\r\nInsoles,Comfort,Gel Cloud,4.8,399,,\r\nInsoles,Comfort Pad,Orthopedic Heel Pad,4.6,299,,\r\nPillows,Unmatched Neck Support,Cervical Butterfly,4.6,2.199,,\r\nPillows,Personalised Support for Head & Neck,Ultimate Deep Sleep,4.9,1.499,,\r\nPillows,Fluffy King Size,Ultimate Cozy,4.7,649,,\r\nPillows,Supports Cervical Neck,Ultimate Neck Contour Cervical Plus,4.8,1.699,,\r\nPillows,Supports Cervical Neck,Ultimate Neck Contour Cervical,4.6,1.119,,\r\nCushions,Ergonomic Sofa Lounge,Ultimate Sofa Backrest,4.7,1.899,,\r\nCushions,Portable Cushioned Workspace,Ultimate Lap Desk,4.7,3.999,,\r\nCushions,Travel-Ready Neck Support,Travel Neck,4.8,1.799,,\r\nCushions,XL Lounging,Ultimate Wedge Plus,4.9,2.099,,\r\nCushions,Ergonomic Car Neck Support,Ultimate Car Neck Rest,4.8,1.299,,\r\nCushions,Back and Seat Support,Ultimate Pro Seating Combo,4.8,2.799,,\r\nCushions,Ergonomic Car Back Support,Ultimate Car Backrest,4.6,1.499,,\r\nCushions,Car Seat Wedge,Ultimate Car Wedge Seat,4.5,1.599,,\r\nCushions,Lounging,Ultimate Wedge,4.7,1.699,,\r\nCushions,Back and Seat Support,Ultimate Pro Seat,4.7,1.799,,\r\nCushions,Optimal Posture Support,Ultimate Pro Posture Corrector,4.8,1.699,,\r\nCushions,Ergonomic Office Neck Rest,Ultimate Office Neck Rest,4.7,1.699,,\r\nInsoles,Sock Shoe Classic,Frido Barefoot Sock Shoe Classic,5,1.999,https://myfrido.com/products/frido-barefoot-sock-shoe-classic,\r\nInsoles,Sock Shoe Pro,Frido Barefoot Sock Shoe Pro,4.9,3.999,https://myfrido.com/products/frido-barefoot-sock-shoe,\r\n"};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frido Product Recommender</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/papaparse@latest/papaparse.min.js"></script>
+    <style>
+        :root {
+            --primary: #FFC107; /* Yellow inspired by Frido branding */
+            --primary-dark: #FFA000; /* Darker yellow for depth */
+            --accent: #10B981; /* Green for secondary actions */
+            --background: #F5F5F5; /* Light gray background for contrast */
+            --card-bg: #FFFFFF; /* White for cards */
+            --text-primary: #1A1A1A; /* Dark gray for text */
+            --text-secondary: #4B4B4B; /* Lighter gray for secondary text */
+            --button-bg: #FFC107; /* Yellow for buttons */
+            --button-hover: #FFA000; /* Darker yellow for hover */
+            --products-card-bg: #000000; /* Black for products count card */
+            --products-text: #FFC107; /* Yellow for products count text */
+        }
+
+        body {
+            background: var(--background);
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+        }
+
+        .line-clamp-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .lucide-icon {
+            width: 1.25rem;
+            height: 1.25rem;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            transition: transform 0.2s ease;
+        }
+
+        .bg-gradient-to-r {
+            background: linear-gradient(to right, var(--primary), var(--primary-dark));
+        }
+
+        .product-card {
+            transition: all 0.3s ease;
+            transform: translateY(0);
+        }
+
+        .product-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+            border-color: var(--primary) !important;
+        }
+
+        .tab-button {
+            transition: all 0.3s ease;
+        }
+
+        .tab-button:hover {
+            background: rgba(255, 193, 7, 0.1);
+            border-radius: 8px;
+        }
+
+        .tab-button.active {
+            border-bottom: 2px solid var(--primary);
+            color: var(--primary);
+        }
+
+        .input-container {
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .input-container input,
+        .input-container select {
+            transition: all 0.3s ease;
+            border: 1px solid #D1D5DB;
+        }
+
+        .input-container input:focus,
+        .input-container select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.1);
+        }
+
+        .header-gradient {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        }
+
+        .purchase-button, .more-button {
+            background: var(--button-bg);
+            color: var(--text-primary);
+            font-weight: 600;
+            transition: background 0.3s ease;
+        }
+
+        .purchase-button:hover, .more-button:hover {
+            background: var(--button-hover);
+        }
+
+        .animate-scale {
+            animation: scaleIn 0.3s ease-out;
+        }
+
+        @keyframes scaleIn {
+            from {
+                transform: scale(0.95);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .button-container {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: nowrap;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-[var(--background)]">
+    <div id="app"></div>
+
+    <script>
+        // SVG Icons
+        const icons = {
+            search: '<svg class="lucide-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>',
+            star: '<svg class="lucide-icon" viewBox="0 0 24 24"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg>',
+            dollarSign: '<svg class="lucide-icon" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
+            filter: '<svg class="lucide-icon" viewBox="0 0 24 24"><polygon points="22,3 2,3 10,12.46 10,19 14,21 14,12.46"/></svg>',
+            trendingUp: '<svg class="lucide-icon" viewBox="0 0 24 24"><polyline points="22,7 13.5,15.5 8.5,10.5 2,17"/><polyline points="16,7 22,7 22,13"/></svg>',
+            grid: '<svg class="lucide-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>',
+            list: '<svg class="lucide-icon" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>',
+            award: '<svg class="lucide-icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="7"/><polyline points="8.21,13.89 7,23 12,20 17,23 15.79,13.88"/></svg>',
+            shoppingCart: '<svg class="lucide-icon" viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>',
+            externalLink: '<svg class="lucide-icon" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>'
+        };
+
+        // Application state
+        let state = {
+            products: [],
+            activeTab: 'overview',
+            searchTerm: '',
+            selectedCategory: '',
+            minRating: 4.0,
+            maxPrice: 5000,
+            selectedProduct: '',
+            viewMode: 'grid'
+        };
+
+        // Category links for "More" buttons
+        const categoryLinks = {
+            Insoles: 'https://myfrido.com/search?q=Insoles&rawQuery=Insoles&page',
+            Pillows: 'https://myfrido.com/search?q=Pillows&rawQuery=Insoles&page',
+            Cushions: 'https://myfrido.com/search?q=Cushions&rawQuery=Insoles&page'
+        };
+
+        // Updated dataset with Purchase and Description
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {"frido_dataset.csv": false};
+        var gk_fileData = {
+            "frido_dataset.csv": `Category,Type,Product,Rating,Price,Purchase,Description
+Insoles,Barefoot Sock Shoe,Barefoot Sock Shoe,4.8,2.699,https://myfrido.com/products/barefoot-sock-shoe,Lightweight and flexible barefoot sock shoe designed to mimic natural foot movement. Provides excellent arch support and breathable material for all-day comfort.
+Insoles,Active Feet Comfort,Active Socks,4.8,799,https://myfrido.com/products/active-socks,Soft and durable socks with built-in cushioning for active lifestyles. Enhances comfort during walking or running with moisture-wicking fabric.
+Insoles,Sports,Dual Gel Pro,4.8,899,https://myfrido.com/products/dual-gel-pro,High-performance gel insoles for sports enthusiasts. Dual-layer gel technology absorbs shock and supports arches during intense activities.
+Insoles,Flat Feet,Flat Arch Support,4.8,1.599,https://myfrido.com/products/flat-arch-support,Specialized insoles for flat feet, offering firm arch support to reduce strain and improve posture during daily activities.
+Insoles,Comfort,Max Comfort Memory Hi-Per Foam,4.6,499,https://myfrido.com/products/max-comfort-memory-hi-per-foam,Memory foam insoles with high-performance cushioning for ultimate comfort. Ideal for long hours of standing or walking.
+Insoles,Sports,Arch Sports,4.7,499,https://myfrido.com/products/arch-sports,Sport-specific insoles with targeted arch support to enhance performance and reduce fatigue during athletic activities.
+Insoles,Comfort,Dual Gel,4.7,599,https://myfrido.com/products/dual-gel,Comfort-focused gel insoles with dual-density cushioning for superior shock absorption and all-day support.
+Insoles,Flat Feet,Flat Feet Arch Support,4.8,999,https://myfrido.com/products/flat-feet-arch-support,Advanced arch support insoles designed for flat feet, promoting proper alignment and reducing foot pain.
+Insoles,Comfort Pad,Ouch Free High Heels Ball of Foot Cushions,4.6,699,https://myfrido.com/products/ouch-free-high-heels-ball-of-foot-cushions,Soft cushions designed for high heels, providing relief to the ball of the foot and preventing discomfort during extended wear.
+Insoles,Comfort,Gel Cloud,4.8,399,https://myfrido.com/products/gel-cloud,Ultra-soft gel insoles offering cloud-like comfort for everyday footwear, reducing pressure on feet.
+Insoles,Comfort Pad,Orthopedic Heel Pad,4.6,299,https://myfrido.com/products/orthopedic-heel-pad,Orthopedic heel pads for targeted heel pain relief, ideal for plantar fasciitis and extended standing.
+Pillows,Unmatched Neck Support,Cervical Butterfly,4.6,2.199,https://myfrido.com/products/cervical-butterfly,Ergonomic cervical pillow with butterfly design to support neck alignment and reduce neck pain during sleep.
+Pillows,Personalised Support for Head & Neck,Ultimate Deep Sleep,4.9,1.499,https://myfrido.com/products/ultimate-deep-sleep,Customizable pillow offering tailored head and neck support for deep, restorative sleep.
+Pillows,Fluffy King Size,Ultimate Cozy,4.7,649,https://myfrido.com/products/ultimate-cozy,Plush king-size pillow for maximum coziness, ideal for lounging or a luxurious sleep experience.
+Pillows,Supports Cervical Neck,Ultimate Neck Contour Cervical Plus,4.8,1.699,https://myfrido.com/products/ultimate-neck-contour-cervical-plus,Advanced cervical pillow with enhanced contouring for superior neck support and pain relief.
+Pillows,Supports Cervical Neck,Ultimate Neck Contour Cervical,4.6,1.119,https://myfrido.com/products/ultimate-neck-contour-cervical,Contoured cervical pillow designed to maintain natural neck alignment and improve sleep quality.
+Cushions,Ergonomic Sofa Lounge,Ultimate Sofa Backrest,4.7,1.899,https://myfrido.com/products/ultimate-sofa-backrest,Ergonomic backrest cushion for sofas, providing lumbar support and enhancing lounging comfort.
+Cushions,Portable Cushioned Workspace,Ultimate Lap Desk,4.7,3.999,https://myfrido.com/products/ultimate-lap-desk,Portable lap desk with cushioned base for comfortable working or reading on the go.
+Cushions,Travel-Ready Neck Support,Travel Neck,4.8,1.799,https://myfrido.com/products/travel-neck,Compact neck support cushion for travel, offering comfort and stability during long journeys.
+Cushions,XL Lounging,Ultimate Wedge Plus,4.9,2.099,https://myfrido.com/products/ultimate-wedge-plus,Extra-large wedge cushion for lounging, providing versatile support for reading or relaxing.
+Cushions,Ergonomic Car Neck Support,Ultimate Car Neck Rest,4.8,1.299,https://myfrido.com/products/ultimate-car-neck-rest,Ergonomic neck rest for car seats, designed to reduce neck strain during drives.
+Cushions,Back and Seat Support,Ultimate Pro Seating Combo,4.8,2.799,https://myfrido.com/products/ultimate-pro-seating-combo,Combined back and seat cushion for comprehensive support, ideal for long sitting sessions.
+Cushions,Ergonomic Car Back Support,Ultimate Car Backrest,4.6,1.499,https://myfrido.com/products/ultimate-car-backrest,Lumbar support cushion for car seats, promoting proper posture and reducing back discomfort.
+Cushions,Car Seat Wedge,Ultimate Car Wedge Seat,4.5,1.599,https://myfrido.com/products/ultimate-car-wedge-seat,Wedge-shaped car seat cushion to improve posture and reduce pressure during driving.
+Cushions,Lounging,Ultimate Wedge,4.7,1.699,https://myfrido.com/products/ultimate-wedge,Versatile wedge cushion for lounging, offering support for back or legs during relaxation.
+Cushions,Back and Seat Support,Ultimate Pro Seat,4.7,1.799,https://myfrido.com/products/ultimate-pro-seat,Supportive seat cushion for enhanced comfort and posture during extended sitting.
+Cushions,Optimal Posture Support,Ultimate Pro Posture Corrector,4.8,1.699,https://myfrido.com/products/ultimate-pro-posture-corrector,Posture-correcting cushion for office or home use, designed to align spine and reduce slouching.
+Cushions,Ergonomic Office Neck Rest,Ultimate Office Neck Rest,4.7,1.699,https://myfrido.com/products/ultimate-office-neck-rest,Ergonomic neck rest for office chairs, providing comfort and support during work hours.
+Insoles,Sock Shoe Classic,Frido Barefoot Sock Shoe Classic,5,1.999,https://myfrido.com/products/frido-barefoot-sock-shoe-classic,Classic barefoot sock shoe with enhanced durability and natural foot movement support for everyday wear.
+Insoles,Sock Shoe Pro,Frido Barefoot Sock Shoe Pro,4.9,3.999,https://myfrido.com/products/frido-barefoot-sock-shoe,Professional-grade barefoot sock shoe with premium materials for superior comfort and performance.`
+        };
+
+        function filledCell(cell) {
+            return cell !== '' && cell != null;
+        }
+
+        function loadFileData(filename) {
+            if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+                try {
+                    var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                    var firstSheetName = workbook.SheetNames[0];
+                    var worksheet = workbook.Sheets[firstSheetName];
+                    var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                    var filteredData = jsonData.filter(row => row.some(filledCell));
+                    var headerRowIndex = filteredData.findIndex((row, index) =>
+                        row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                    );
+                    if (headerRowIndex === -1 || headerRowIndex > 25) {
+                        headerRowIndex = 0;
+                    }
+                    var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex));
+                    csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                    return csv;
+                } catch (e) {
+                    console.error(e);
+                    return "";
+                }
+            }
+            return gk_fileData[filename] || "";
+        }
+
+        // Parse CSV data
+        function parseCSV() {
+            const csv = loadFileData("frido_dataset.csv");
+            Papa.parse(csv, {
+                header: true,
+                skipEmptyLines: true,
+                dynamicTyping: false,
+                transformHeader: (header) => header.trim().replace(/^"|"$/g, ''),
+                transform: (value, header) => {
+                    let cleaned = value.trim().replace(/^"|"$/g, '');
+                    if (['Rating', 'Price'].includes(header)) {
+                        return cleaned === '' || isNaN(cleaned) ? 0 : parseFloat(cleaned);
+                    }
+                    return cleaned;
+                },
+                complete: (results) => {
+                    state.products = results.data.filter(row => 
+                        row['Product'] && row['Rating'] >= 0 && row['Price'] >= 0
+                    ).map(row => ({
+                        Category: row['Category'],
+                        Type: row['Type'],
+                        Product: row['Product'],
+                        Rating: parseFloat(row['Rating'].toFixed(1)),
+                        Price: parseFloat(row['Price']),
+                        Purchase: row['Purchase'],
+                        Description: row['Description']
+                    }));
+                    render();
+                },
+                error: (err) => {
+                    console.error('CSV Parsing Error:', err);
+                    document.getElementById('app').innerHTML = '<div class="text-center text-red-500">Error loading data</div>';
+                }
+            });
+        }
+
+        // Calculate statistics
+        function getStats() {
+            if (state.products.length === 0) return {};
+            
+            const categories = [...new Set(state.products.map(p => p.Category))];
+            const avgRating = state.products.reduce((sum, p) => sum + p.Rating, 0) / state.products.length;
+            const avgPrice = state.products.reduce((sum, p) => sum + p.Price, 0) / state.products.length;
+            const priceRange = { 
+                min: Math.min(...state.products.map(p => p.Price)), 
+                max: Math.max(...state.products.map(p => p.Price)) 
+            };
+            
+            return { categories, avgRating, avgPrice, priceRange, totalProducts: state.products.length };
+        }
+
+        // Calculate similarity between products
+        function calculateSimilarity(product1, product2) {
+            let score = 0;
+            if (product1.Category === product2.Category) score += 0.5;
+            if (product1.Type === product2.Type) score += 0.3;
+            const ratingDiff = Math.abs(product1.Rating - product2.Rating);
+            score += (1 - ratingDiff / 5) * 0.2;
+            return score;
+        }
+
+        // Recommendation algorithms
+        function getContentBasedRecommendations(productName, topN = 5) {
+            const targetProduct = state.products.find(p => p.Product === productName);
+            if (!targetProduct) return [];
+            
+            return state.products
+                .filter(p => p.Product !== productName)
+                .map(p => ({
+                    ...p,
+                    similarity: calculateSimilarity(targetProduct, p)
+                }))
+                .sort((a, b) => b.similarity - a.similarity)
+                .slice(0, topN);
+        }
+
+        function getTopRatedProducts(minRating = 4.0, topN = 5) {
+            return state.products
+                .filter(p => p.Rating >= minRating)
+                .sort((a, b) => b.Rating - a.Rating)
+                .slice(0, topN);
+        }
+
+        function getBudgetFriendlyProducts(maxPrice = 5000, topN = 5) {
+            return state.products
+                .filter(p => p.Price <= maxPrice)
+                .sort((a, b) => b.Rating - a.Rating || a.Price - b.Price)
+                .slice(0, topN);
+        }
+
+        function getPersonalizedRecommendations(preferences, topN = 5) {
+            let filtered = state.products;
+            
+            if (preferences.category) {
+                filtered = filtered.filter(p => p.Category === preferences.category);
+            }
+            if (preferences.minRating) {
+                filtered = filtered.filter(p => p.Rating >= preferences.minRating);
+            }
+            if (preferences.maxPrice) {
+                filtered = filtered.filter(p => p.Price <= preferences.maxPrice);
+            }
+            if (preferences.type) {
+                filtered = filtered.filter(p => p.Type.toLowerCase().includes(preferences.type.toLowerCase()));
+            }
+            
+            const priceWeight = preferences.priceWeight || 0.3;
+            const ratingWeight = preferences.ratingWeight || 0.7;
+            
+            const maxPrice = Math.max(...filtered.map(p => p.Price));
+            const minPrice = Math.min(...filtered.map(p => p.Price));
+            
+            return filtered
+                .map(p => {
+                    const normalizedPrice = maxPrice > minPrice ? 1 - (p.Price - minPrice) / (maxPrice - minPrice) : 0.5;
+                    const normalizedRating = p.Rating / 5.0;
+                    const score = ratingWeight * normalizedRating + priceWeight * normalizedPrice;
+                    return { ...p, score };
+                })
+                .sort((a, b) => b.score - a.score)
+                .slice(0, topN);
+        }
+
+        // Get filtered products
+        function getFilteredProducts() {
+            return state.products.filter(product => {
+                const matchesSearch = product.Product.toLowerCase().includes(state.searchTerm.toLowerCase()) ||
+                                     product.Type.toLowerCase().includes(state.searchTerm.toLowerCase()) ||
+                                     product.Description.toLowerCase().includes(state.searchTerm.toLowerCase());
+                const matchesCategory = !state.selectedCategory || product.Category === state.selectedCategory;
+                const matchesRating = product.Rating >= state.minRating;
+                const matchesPrice = product.Price <= state.maxPrice;
+                
+                return matchesSearch && matchesCategory && matchesRating && matchesPrice;
+            });
+        }
+
+        // Create product card HTML
+        function createProductCard(product, similarity) {
+            const similarityBadge = similarity ? 
+                `<span class="text-xs font-medium text-[var(--accent)] bg-green-50 px-3 py-1 rounded-full">
+                    ${Math.round(similarity * 100)}% match
+                </span>` : '';
+            const moreLink = categoryLinks[product.Category] || '';
+
+            return `
+                <div class="product-card bg-[var(--card-bg)] rounded-xl border border-gray-200 p-6 animate-scale">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-sm font-medium text-white bg-[var(--primary)] px-3 py-1 rounded-full">
+                            ${product.Category}
+                        </span>
+                        <div class="flex items-center">
+                            <span class="w-5 h-5 text-yellow-400">${icons.star}</span>
+                            <span class="ml-2 text-sm font-semibold text-[var(--text-primary)]">${product.Rating.toFixed(1)}</span>
+                        </div>
+                    </div>
+                    
+                    <h3 class="font-semibold text-lg text-[var(--text-primary)] mb-2 line-clamp-2">${product.Product}</h3>
+                    <p class="text-sm text-[var(--text-secondary)] mb-2">${product.Type}</p>
+                    <p class="text-sm text-[var(--text-secondary)] mb-4 line-clamp-2">${product.Description}</p>
+                    
+                    <div class="flex items-center justify-between">
+                        <span class="text-xl font-bold text-[var(--text-primary)]">₹${product.Price.toLocaleString()}</span>
+                        <div class="button-container">
+                            ${similarityBadge}
+                            <a href="${product.Purchase}" target="_blank" class="purchase-button px-4 py-2 rounded-lg flex items-center gap-2">
+                                <span class="w-5 h-5">${icons.shoppingCart}</span>
+                                Purchase
+                            </a>
+                            <a href="${moreLink}" target="_blank" class="more-button px-4 py-2 rounded-lg flex items-center gap-2">
+                                <span class="w-5 h-5">${icons.externalLink}</span>
+                                More
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Create recommendation grid
+        function createRecommendationGrid(recommendations, title) {
+            const cards = recommendations.map(product => 
+                createProductCard(product, product.similarity)
+            ).join('');
+
+            return `
+                <div class="mb-12">
+                    <h3 class="text-xl font-semibold mb-6 flex items-center text-[var(--text-primary)]">
+                        <span class="w-6 h-6 mr-3 text-[var(--primary)]">${icons.award}</span>
+                        ${title}
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        ${cards}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Render the application
+        function render() {
+            const stats = getStats();
+            const filteredProducts = getFilteredProducts();
+            
+            const tabs = [
+                { id: 'overview', label: 'Overview', icon: 'grid' },
+                { id: 'content', label: 'Similar Products', icon: 'search' },
+                { id: 'rated', label: 'Top Rated', icon: 'star' },
+                { id: 'budget', label: 'Budget Friendly', icon: 'dollarSign' },
+                { id: 'personalized', label: 'Personalized', icon: 'filter' }
+            ];
+
+            let tabContent = '';
+
+            if (state.activeTab === 'overview') {
+                const productCards = filteredProducts.map(product => createProductCard(product)).join('');
+                const gridClass = state.viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1';
+                
+                tabContent = `
+                    <div class="space-y-8">
+                        <!-- Stats Cards -->
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                            <div class="bg-[var(--products-card-bg)] p-6 rounded-xl shadow-sm border border-gray-100 animate-scale">
+                                <div class="flex items-center">
+                                    <div class="p-3 bg-yellow-50 rounded-lg">
+                                        <span class="w-6 h-6 text-[var(--primary)]">${icons.grid}</span>
+                                    </div>
+                                    <div class="ml-4">
+                                        <p class="text-sm text-[var(--products-text)]">Total Products</p>
+                                        <p class="text-2xl font-bold text-[var(--products-text)]">${stats.totalProducts}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-[var(--card-bg)] p-6 rounded-xl shadow-sm border border-gray-100 animate-scale">
+                                <div class="flex items-center">
+                                    <div class="p-3 bg-yellow-50 rounded-lg">
+                                        <span class="w-6 h-6 text-yellow-600">${icons.star}</span>
+                                    </div>
+                                    <div class="ml-4">
+                                        <p class="text-sm text-[var(--text-secondary)]">Avg Rating</p>
+                                        <p class="text-2xl font-bold text-[var(--text-primary)]">${stats.avgRating?.toFixed(1)}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-[var(--card-bg)] p-6 rounded-xl shadow-sm border border-gray-100 animate-scale">
+                                <div class="flex items-center">
+                                    <div class="p-3 bg-green-50 rounded-lg">
+                                        <span class="w-6 h-6 text-[var(--accent)]">${icons.dollarSign}</span>
+                                    </div>
+                                    <div class="ml-4">
+                                        <p class="text-sm text-[var(--text-secondary)]">Avg Price</p>
+                                        <p class="text-2xl font-bold text-[var(--text-primary)]">₹${Math.round(stats.avgPrice)}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-[var(--card-bg)] p-6 rounded-xl shadow-sm border border-gray-100 animate-scale">
+                                <div class="flex items-center">
+                                    <div class="p-3 bg-yellow-50 rounded-lg">
+                                        <span class="w-6 h-6 text-[var(--primary)]">${icons.trendingUp}</span>
+                                    </div>
+                                    <div class="ml-4">
+                                        <p class="text-sm text-[var(--text-secondary)]">Categories</p>
+                                        <p class="text-2xl font-bold text-[var(--text-primary)]">${stats.categories?.length}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Search and Filters -->
+                        <div class="bg-[var(--card-bg)] p-6 rounded-xl shadow-sm border border-gray-100">
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+                                <div class="input-container">
+                                    <label class="block text-sm font-medium text-[var(--text-secondary)] mb-2">Search</label>
+                                    <div class="relative">
+                                        <span class="absolute left-3 top-3 h-5 w-5 text-[var(--text-secondary)]">${icons.search}</span>
+                                        <input
+                                            type="text"
+                                            placeholder="Search products..."
+                                            value="${state.searchTerm}"
+                                            onchange="updateState('searchTerm', this.value)"
+                                            class="pl-10 w-full p-3 rounded-lg focus:ring-0"
+                                        />
+                                    </div>
+                                </div>
+                                
+                                <div class="input-container">
+                                    <label class="block text-sm font-medium text-[var(--text-secondary)] mb-2">Category</label>
+                                    <select
+                                        value="${state.selectedCategory}"
+                                        onchange="updateState('selectedCategory', this.value)"
+                                        class="w-full p-3 rounded-lg focus:ring-0"
+                                    >
+                                        <option value="">All Categories</option>
+                                        ${stats.categories?.map(cat => `<option value="${cat}">${cat}</option>`).join('')}
+                                    </select>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-[var(--text-secondary)] mb-2">Min Rating</label>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="5"
+                                        step="0.1"
+                                        value="${state.minRating}"
+                                        onchange="updateState('minRating', parseFloat(this.value))"
+                                        class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                                    />
+                                    <span class="text-sm text-[var(--text-secondary)]">${state.minRating}</span>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-[var(--text-secondary)] mb-2">Max Price</label>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="5000"
+                                        step="100"
+                                        value="${state.maxPrice}"
+                                        onchange="updateState('maxPrice', parseInt(this.value))"
+                                        class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                                    />
+                                    <span class="text-sm text-[var(--text-secondary)]">₹${state.maxPrice.toLocaleString()}</span>
+                                </div>
+                            </div>
+                            
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm text-[var(--text-secondary)]">
+                                    ${filteredProducts.length} products found
+                                </span>
+                                <div class="flex items-center space-x-3">
+                                    <button
+                                        onclick="updateState('viewMode', 'grid')"
+                                        class="p-2 rounded ${state.viewMode === 'grid' ? 'bg-yellow-100 text-[var(--primary)]' : 'text-[var(--text-secondary)]'} hover:bg-yellow-50"
+                                    >
+                                        <span class="w-5 h-5">${icons.grid}</span>
+                                    </button>
+                                    <button
+                                        onclick="updateState('viewMode', 'list')"
+                                        class="p-2 rounded ${state.viewMode === 'list' ? 'bg-yellow-100 text-[var(--primary)]' : 'text-[var(--text-secondary)]'} hover:bg-yellow-50"
+                                    >
+                                        <span class="w-5 h-5">${icons.list}</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Product Grid -->
+                        <div class="grid gap-6 ${gridClass}">
+                            ${productCards}
+                        </div>
+                    </div>
+                `;
+            } else if (state.activeTab === 'content') {
+                const productOptions = state.products.map(product => 
+                    `<option value="${product.Product}">${product.Product}</option>`
+                ).join('');
+                
+                const recommendations = state.selectedProduct ? 
+                    createRecommendationGrid(
+                        getContentBasedRecommendations(state.selectedProduct),
+                        `Products similar to "${state.selectedProduct}"`
+                    ) : '';
+
+                tabContent = `
+                    <div class="space-y-8">
+                        <div class="bg-[var(--card-bg)] p-6 rounded-xl shadow-sm border border-gray-100">
+                            <h2 class="text-xl font-semibold mb-4 text-[var(--text-primary)]">Find Similar Products</h2>
+                            <div class="input-container">
+                                <select
+                                    value="${state.selectedProduct}"
+                                    onchange="updateState('selectedProduct', this.value)"
+                                    class="w-full p-3 rounded-lg focus:ring-0"
+                                >
+                                    <option value="">Select a product...</option>
+                                    ${productOptions}
+                                </select>
+                            </div>
+                        </div>
+                        
+                        ${recommendations}
+                    </div>
+                `;
+            } else if (state.activeTab === 'rated') {
+                tabContent = `
+                    <div class="space-y-8">
+                        <div class="bg-[var(--card-bg)] p-6 rounded-xl shadow-sm border border-gray-100">
+                            <h2 class="text-xl font-semibold mb-4 text-[var(--text-primary)]">Top Rated Products</h2>
+                            <div class="flex items-center gap-4">
+                                <label class="text-sm font-medium text-[var(--text-secondary)]">Minimum Rating:</label>
+                                <input
+                                    type="range"
+                                    min="4.0"
+                                    max="5.0"
+                                    step="0.1"
+                                    value="${state.minRating}"
+                                    onchange="updateState('minRating', parseFloat(this.value))"
+                                    class="w-32 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                                />
+                                <span class="text-sm text-[var(--text-secondary)]">${state.minRating}</span>
+                            </div>
+                        </div>
+                        
+                        ${createRecommendationGrid(
+                            getTopRatedProducts(state.minRating),
+                            `Top products with rating ≥ ${state.minRating}`
+                        )}
+                    </div>
+                `;
+            } else if (state.activeTab === 'budget') {
+                tabContent = `
+                    <div class="space-y-8">
+                        <div class="bg-[var(--card-bg)] p-6 rounded-xl shadow-sm border border-gray-100">
+                            <h2 class="text-xl font-semibold mb-4 text-[var(--text-primary)]">Budget-Friendly Products</h2>
+                            <div class="flex items-center gap-4">
+                                <label class="text-sm font-medium text-[var(--text-secondary)]">Maximum Price:</label>
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="5000"
+                                    step="100"
+                                    value="${state.maxPrice}"
+                                    onchange="updateState('maxPrice', parseInt(this.value))"
+                                    class="w-32 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                                />
+                                <span class="text-sm text-[var(--text-secondary)]">₹${state.maxPrice.toLocaleString()}</span>
+                            </div>
+                        </div>
+                        
+                        ${createRecommendationGrid(
+                            getBudgetFriendlyProducts(state.maxPrice),
+                            `Best products under ₹${state.maxPrice.toLocaleString()}`
+                        )}
+                    </div>
+                `;
+            } else if (state.activeTab === 'personalized') {
+                const categoryOptions = stats.categories?.map(cat => 
+                    `<option value="${cat}">${cat}</option>`
+                ).join('');
+
+                tabContent = `
+                    <div class="space-y-8">
+                        <div class="bg-[var(--card-bg)] p-6 rounded-xl shadow-sm border border-gray-100">
+                            <h2 class="text-xl font-semibold mb-4 text-[var(--text-primary)]">Personalized Recommendations</h2>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div class="space-y-4">
+                                    <div class="input-container">
+                                        <label class="block text-sm font-medium text-[var(--text-secondary)] mb-2">Preferred Category</label>
+                                        <select
+                                            value="${state.selectedCategory}"
+                                            onchange="updateState('selectedCategory', this.value)"
+                                            class="w-full p-3 rounded-lg focus:ring-0"
+                                        >
+                                            <option value="">Any Category</option>
+                                            ${categoryOptions}
+                                        </select>
+                                    </div>
+                                    
+                                    <div>
+                                        <label class="block text-sm font-medium text-[var(--text-secondary)] mb-2">Minimum Rating</label>
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="5"
+                                            step="0.1"
+                                            value="${state.minRating}"
+                                            onchange="updateState('minRating', parseFloat(this.value))"
+                                            class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                                        />
+                                        <span class="text-sm text-[var(--text-secondary)]">${state.minRating}</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-[var(--text-secondary)] mb-2">Maximum Price</label>
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="5000"
+                                            step="100"
+                                            value="${state.maxPrice}"
+                                            onchange="updateState('maxPrice', parseInt(this.value))"
+                                            class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                                        />
+                                        <span class="text-sm text-[var(--text-secondary)]">₹${state.maxPrice.toLocaleString()}</span>
+                                    </div>
+                                    
+                                    <div class="input-container">
+                                        <label class="block text-sm font-medium text-[var(--text-secondary)] mb-2">Product Type</label>
+                                        <input
+                                            type="text"
+                                            placeholder="e.g., Sports, Comfort, Ergonomic"
+                                            value="${state.searchTerm}"
+                                            onchange="updateState('searchTerm', this.value)"
+                                            class="w-full p-3 rounded-lg focus:ring-0"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        ${createRecommendationGrid(
+                            getPersonalizedRecommendations({
+                                category: state.selectedCategory,
+                                minRating: state.minRating,
+                                maxPrice: state.maxPrice,
+                                type: state.searchTerm,
+                                priceWeight: 0.3,
+                                ratingWeight: 0.7
+                            }),
+                            "Your personalized recommendations"
+                        )}
+                    </div>
+                `;
+            }
+
+            const tabButtons = tabs.map(tab => `
+                <button
+                    onclick="setActiveTab('${tab.id}')"
+                    class="tab-button flex items-center py-4 px-4 text-sm font-medium ${
+                        state.activeTab === tab.id
+                            ? 'active'
+                            : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                    }"
+                >
+                    <span class="w-5 h-5 mr-2">${icons[tab.icon]}</span>
+                    ${tab.label}
+                </button>
+            `).join('');
+
+            document.getElementById('app').innerHTML = `
+                <!-- Header -->
+                <div class="header-gradient text-[var(--text-primary)] shadow-lg">
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                        <div class="flex justify-between items-center py-8">
+                            <div>
+                                <h1 class="text-3xl font-bold">🛍️ Frido Product Recommender</h1>
+                                <p class="text-[var(--text-primary)]">Smart Product Recommendations AI Agent powered by Frido</p>
+                            </div>
+                            <div class="flex items-center space-x-4">
+                                <div class="bg-[var(--products-card-bg)] px-4 py-2 rounded-full">
+                                    <span class="text-sm font-medium text-[var(--products-text)]">
+                                        ${stats.totalProducts} Products
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Navigation -->
+                <div class="bg-[var(--card-bg)] shadow-sm">
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                        <div class="flex space-x-8">
+                            ${tabButtons}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main Content -->
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                    ${tabContent}
+                </div>
+            `;
+        }
+
+        // Update state and re-render
+        function updateState(key, value) {
+            state[key] = value;
+            render();
+        }
+
+        // Set active tab
+        function setActiveTab(tabId) {
+            state.activeTab = tabId;
+            render();
+        }
+
+        // Initialize the application
+        function init() {
+            parseCSV();
+        }
+
+        // Start the application when DOM is loaded
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
